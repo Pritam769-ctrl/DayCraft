@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DayCraft - Daily Life Planner</title>
+    <link rel="manifest" href="manifest.json">
+    
+    <meta name="theme-color" content="#4a90e2">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then((reg) => console.log('Service Worker Registered!', reg.scope))
+                    .catch((err) => console.log('Service Worker Registration Failed:', err));
+            });
+        }
+    </script>
+    <style>
+        :root {
+            --bg-light: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            --bg-dark: linear-gradient(135deg, #232526 0%, #414345 100%);
+            --glass-light: rgba(255, 255, 255, 0.65);
+            --glass-dark: rgba(20, 20, 20, 0.65);
+            --text-light: #333;
+            --text-dark: #eee;
+            --accent: #4a90e2;
+            --danger: #ff6b6b;
+            --success: #51cf66;
+            --border-light: 1px solid rgba(255, 255, 255, 0.5);
+            --border-dark: 1px solid rgba(255, 255, 255, 0.1);
+            --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+            --nav-height: 80px;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-light);
+            color: var(--text-light);
+            height: 100vh;
+            overflow: hidden;
+            transition: background 0.5s ease;
+        }
+
+        body.dark-mode {
+            background: var(--bg-dark);
+            color: var(--text-dark);
+        }
+
+        /* --- Glass Components --- */
+        .glass-panel {
+            background: var(--glass-light);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 24px;
+            border: var(--border-light);
+            box-shadow: var(--shadow);
+        }
+
+        body.dark-mode .glass-panel {
+            background: var(--glass-dark);
+            border: var(--border-dark);
+        }
+
+        /* --- Layout --- */
+        .app-container {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .header {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        /* IMPROVED HEADINGS */
+        .app-title h1 { 
+            margin: 0; 
+            font-size: 2.2rem; 
+            letter-spacing: -1px; 
+            font-weight: 800;
+            background: linear-gradient(45deg, #4a90e2, #9013fe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .app-title p { margin: 0; font-size: 0.9rem; opacity: 0.7; font-weight: 500; }
+
+        /* Greeting Styles */
+        #planner-greeting {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-top: 0;
+            margin-bottom: 5px;
+            background: linear-gradient(90deg, #333, #555);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        body.dark-mode #planner-greeting {
+            background: linear-gradient(90deg, #fff, #ccc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .content-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            padding-bottom: 200px; 
+            position: relative;
+        }
+
+        /* --- Custom Toggle Switch --- */
+        .theme-toggle {
+            width: 80px;
+            height: 36px;
+            border-radius: 36px;
+            position: relative;
+            cursor: pointer;
+            overflow: hidden;
+            transition: all 0.4s ease;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .theme-toggle { background: #54aaff; } 
+        .toggle-thumb {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #fdd835; 
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 2;
+        }
+        .toggle-deco { position: absolute; width: 100%; height: 100%; top: 0; left: 0; transition: opacity 0.4s; }
+        .clouds { opacity: 1; }
+        .stars { opacity: 0; }
+        .cloud-part { background: white; border-radius: 50%; position: absolute; bottom: -5px; }
+        .cp1 { width: 20px; height: 20px; right: 10px; }
+        .cp2 { width: 30px; height: 30px; right: 25px; }
+        .cp3 { width: 25px; height: 25px; right: 45px; }
+        body.dark-mode .theme-toggle { background: #2c3e50; } 
+        body.dark-mode .toggle-thumb { left: 47px; background: #ddd; box-shadow: inset -3px -2px 0 #bbb; }
+        body.dark-mode .clouds { opacity: 0; }
+        body.dark-mode .stars { opacity: 1; }
+        .star { position: absolute; background: white; border-radius: 50%; }
+        .s1 { width: 2px; height: 2px; top: 10px; left: 20px; }
+        .s2 { width: 3px; height: 3px; top: 20px; left: 10px; }
+        .s3 { width: 2px; height: 2px; top: 8px; left: 35px; }
+        .s4 { width: 2px; height: 2px; top: 25px; left: 40px; }
+
+        /* --- Navigation --- */
+        .nav-bar {
+            position: fixed; 
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            height: var(--nav-height);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 500;
+        }
+        
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.5;
+            transition: 0.3s;
+            cursor: pointer;
+            font-size: 0.75rem;
+            color: inherit;
+        }
+        .nav-item.active { opacity: 1; transform: translateY(-5px); font-weight: bold; color: var(--accent); }
+        .nav-icon svg { width: 24px; height: 24px; fill: currentColor; margin-bottom: 5px; }
+        
+        /* Action Icons */
+        .action-icon { width: 20px; height: 20px; fill: currentColor; cursor: pointer; opacity: 0.7; transition: 0.2s; margin-left: 10px; }
+        .action-icon:hover { opacity: 1; transform: scale(1.1); }
+        .icon-trash { color: var(--danger); }
+        .icon-edit { color: var(--accent); }
+
+        /* --- Pages --- */
+        .page { display: none; animation: fadeIn 0.4s ease; }
+        .page.active { display: block; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- Components --- */
+        button {
+            border: none;
+            padding: 10px 20px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.1s;
+        }
+        button:active { transform: scale(0.95); }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        
+        /* IMPROVED GLASS BUTTON (Read Me Visibility Fix) */
+        .btn-glass { 
+            background: rgba(255,255,255,0.5); /* Stronger background for light mode */
+            border: 1px solid rgba(0,0,0,0.1); /* Darker border for light mode */
+            color: #333;
+        }
+        body.dark-mode .btn-glass { 
+            background: rgba(255,255,255,0.1); 
+            border: 1px solid rgba(255,255,255,0.3); 
+            color: #fff;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 12px;
+            border: none;
+            background: rgba(255,255,255,0.3);
+            backdrop-filter: blur(5px);
+            color: inherit;
+            outline: none;
+        }
+        body.dark-mode input, body.dark-mode select { background: rgba(0,0,0,0.3); }
+
+        /* --- Setup Wizard --- */
+        #setup-wizard {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-light);
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 30px;
+            text-align: center;
+        }
+        body.dark-mode #setup-wizard { background: var(--bg-dark); }
+
+        /* --- Planner Styles --- */
+        .date-pills { display: flex; gap: 10px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 5px; }
+        .pill { padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); white-space: nowrap; cursor: pointer; border: 1px solid transparent; }
+        .pill.active { background: var(--accent); color: white; box-shadow: 0 4px 10px rgba(74, 144, 226, 0.4); }
+        
+        .debt-card {
+            background: rgba(255, 107, 107, 0.15);
+            border: 1px solid var(--danger);
+            color: var(--danger);
+            padding: 15px;
+            border-radius: 16px;
+            margin-bottom: 15px;
+        }
+        .debt-quote { font-style: italic; font-size: 0.8rem; margin-top: 5px; opacity: 0.8; }
+
+        /* --- Task Manager --- */
+        .task-card {
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        /* Task Set Accordion */
+        details.set-card {
+            margin-bottom: 10px;
+            overflow: hidden;
+            transition: 0.3s;
+        }
+        details.set-card summary {
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            list-style: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        details.set-card summary::-webkit-details-marker { display: none; }
+        
+        .set-content {
+            padding: 10px 15px;
+            background: rgba(0,0,0,0.05);
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        body.dark-mode .set-content { background: rgba(255,255,255,0.05); }
+
+        /* --- Execution --- */
+        .timeline-container { position: relative; padding-left: 20px; margin-top: 20px; }
+        .timeline-line {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: rgba(150,150,150,0.3);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            width: 100%;
+            background: var(--accent);
+            height: 0%; /* JS updates this */
+            transition: height 0.5s ease;
+        }
+        
+        .timeline-item {
+            position: relative;
+            margin-bottom: 15px;
+            padding: 15px;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            user-select: none;
+            overflow: hidden;
+        }
+        
+        .swiped-out {
+            transform: translateX(120%);
+            opacity: 0;
+        }
+
+        /* IMPROVED PEACE OUT BUTTON */
+        .peace-out-btn {
+            width: 100%;
+            padding: 20px;
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            /* High visibility gradient */
+            background: linear-gradient(45deg, #ff6b6b, #ff8e53); 
+            color: white; /* White text for contrast */
+            font-weight: bold;
+            box-shadow: 0 5px 20px rgba(255, 107, 107, 0.4); /* Glow */
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        /* Modal */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: none; align-items: center; justify-content: center;
+            z-index: 600;
+        }
+        .modal-content {
+            width: 90%; max-width: 400px; padding: 25px;
+            text-align: center;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        /* --- Footer Info --- */
+        .app-footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 0.8rem;
+            opacity: 0.6;
+            line-height: 1.6;
+            padding-bottom: 20px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="setup-wizard" class="glass-panel" style="display:none;">
+        <div style="margin-bottom: 20px;">
+            <div class="theme-toggle" onclick="toggleTheme()">
+                <div class="toggle-deco clouds">
+                    <div class="cloud-part cp1"></div>
+                    <div class="cloud-part cp2"></div>
+                    <div class="cloud-part cp3"></div>
+                </div>
+                <div class="toggle-deco stars">
+                    <div class="star s1"></div>
+                    <div class="star s2"></div>
+                    <div class="star s3"></div>
+                    <div class="star s4"></div>
+                </div>
+                <div class="toggle-thumb"></div>
+            </div>
+        </div>
+        
+        <h2>Welcome to DayCraft</h2>
+        <input type="text" id="setup-name" placeholder="What's your First Name?">
+        
+        <p style="margin-top:20px; opacity:0.8;">Add tasks you might do (you can edit later)</p>
+        <div id="setup-task-list" style="width:100%; max-height: 150px; overflow-y:auto; margin-bottom:10px;"></div>
+        <div style="display:flex; gap:5px; width:100%;">
+            <input type="text" id="setup-new-task" placeholder="e.g. Gym, Read, Code">
+            <button class="btn-primary" onclick="addSetupTask()">+</button>
+        </div>
+
+        <button class="btn-success" style="margin-top: 30px; width: 100%;" onclick="completeSetup()">Start Crafting</button>
+    </div>
+
+    <div class="app-container" id="main-app" style="display:none;">
+        
+        <div class="header">
+            <div class="app-title">
+                <h1>DayCraft</h1>
+                <p>Daily Life Planner</p>
+            </div>
+            <div class="theme-toggle" onclick="toggleTheme()">
+                <div class="toggle-deco clouds">
+                    <div class="cloud-part cp1"></div>
+                    <div class="cloud-part cp2"></div>
+                    <div class="cloud-part cp3"></div>
+                </div>
+                <div class="toggle-deco stars">
+                    <div class="star s1"></div>
+                    <div class="star s2"></div>
+                    <div class="star s3"></div>
+                    <div class="star s4"></div>
+                </div>
+                <div class="toggle-thumb"></div>
+            </div>
+        </div>
+
+        <div class="content-area">
+
+            <div id="page-planner" class="page active">
+                <h2 id="planner-greeting">Good Morning, User</h2>
+                <p style="opacity:0.6; margin-bottom: 15px;">Let's Craft your day</p>
+
+                <div id="debt-container"></div>
+
+                <div class="date-pills" id="planner-pills"></div>
+
+                <div class="glass-panel" style="padding: 15px; margin-bottom: 20px;">
+                    <div id="planner-list-display">
+                        <p style="text-align:center; opacity:0.5;">No plans for this date yet.</p>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <button class="btn-glass" onclick="openAddPlanModal()">+ Add Plan</button>
+                    <button class="btn-glass" onclick="openPasteTasksetModal()">Paste Taskset</button>
+                </div>
+            </div>
+
+            <div id="page-execution" class="page">
+                <button class="peace-out-btn glass-panel" onclick="confirmPeaceOut()">Peace out ✌🏻</button>
+                
+                <div class="glass-panel" style="padding: 20px; min-height: 400px;">
+                    <h3>Today's Roadmap</h3>
+                    <div class="timeline-container">
+                        <div class="timeline-line">
+                            <div class="progress-bar" id="day-progress"></div>
+                        </div>
+                        <div id="execution-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="page-manager" class="page">
+                <h3>Task Manager</h3>
+                
+                <details class="glass-panel" style="margin-bottom: 15px; padding: 5px;">
+                    <summary style="padding:15px; font-weight:bold; cursor:pointer;">Edit Task Pool</summary>
+                    <div style="padding: 15px;">
+                        <div style="display:flex; gap:5px; margin-bottom:10px;">
+                            <input type="text" id="mgr-new-task" placeholder="New Task Name">
+                            <button class="btn-primary" onclick="mgrAddTask()">Add</button>
+                        </div>
+                        <div id="mgr-pool-list"></div>
+                    </div>
+                </details>
+
+                <div class="glass-panel" style="padding: 15px;">
+                    <h4>Tasksets</h4>
+                    <button class="btn-primary" style="width:100%; margin-bottom:15px;" onclick="openCreateTaskset()">Create Taskset</button>
+                    <div id="mgr-tasksets-list"></div>
+                </div>
+            </div>
+
+            <div id="page-settings" class="page">
+                <h3>Settings</h3>
+                
+                <div class="glass-panel" style="padding: 20px; margin-bottom: 15px;">
+                    <label style="opacity:0.8; font-size:0.9rem;">Your Name</label>
+                    <div style="display:flex; gap:10px; margin-top:5px;">
+                        <input type="text" id="settings-name-input">
+                        <button class="btn-success" onclick="updateName()">Save</button>
+                    </div>
+                </div>
+
+                <div class="glass-panel" style="padding: 20px; display:flex; flex-direction:column; gap: 15px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <span style="font-weight:bold;">Freeze Day ❄️</span>
+                        <div id="freeze-btn" class="pill" style="cursor:pointer; transition:0.3s;" onclick="toggleFreeze()">OFF</div>
+                    </div>
+                    <p style="font-size:0.8rem; opacity:0.7; margin-top:-5px;">Use in emergencies. Pauses debt calculation.</p>
+                    <hr style="width:100%; border:0; border-top:1px solid rgba(255,255,255,0.3);">
+
+                    <button class="btn-glass" onclick="openReadMe()">Read Me 📖</button>
+                    
+                    <button class="btn-primary" style="background-color: #4a90e2;" onclick="backupData()">Backup Data</button>
+                    <button class="btn-success" style="background-color: #90ee90; color:#333;" onclick="restoreData()">Restore Data</button>
+                    <input type="file" id="restore-file" style="display:none" onchange="processRestore(this)">
+                    
+                    <hr style="width:100%; border:0; border-top:1px solid rgba(255,255,255,0.3);">
+                    <button class="btn-danger" onclick="resetAllData()">Reset All Data</button>
+                </div>
+
+                <div class="app-footer">
+                    <strong>DayCraft 1.5</strong><br>
+                    Created by Pritam and Rupam Roy<br>
+                    Customer Support: rpritam906@gmail.com
+                </div>
+            </div>
+
+        </div>
+
+        <div class="nav-bar glass-panel">
+            <div class="nav-item active" onclick="navTo('planner')">
+                <div class="nav-icon"><svg viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zm-7 5h5v5h-5z"/></svg></div>
+                <span>Planner</span>
+            </div>
+            <div class="nav-item" onclick="navTo('execution')">
+                <div class="nav-icon"><svg viewBox="0 0 24 24"><path d="M13 12h7v1.5h-7zm0-2.5h7V11h-7zm0 5h7V16h-7zM21 4H3c-1.1 0-2 .9-2 2v13c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 15h-9V6h9v13z"/></svg></div>
+                <span>Execution</span>
+            </div>
+            <div class="nav-item" onclick="navTo('manager')">
+                <div class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg></div>
+                <span>Manager</span>
+            </div>
+            <div class="nav-item" onclick="navTo('settings')">
+                <div class="nav-icon"><svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg></div>
+                <span>Settings</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-add-plan" class="modal">
+        <div class="glass-panel modal-content">
+            <h3>Add Task</h3>
+            <select id="modal-task-select"></select>
+            <input type="text" id="modal-custom-task" placeholder="Or type custom task name" style="margin-top:0;">
+            
+            <div style="display:flex; gap:5px;">
+                <input type="time" id="modal-time-from">
+                <input type="time" id="modal-time-to">
+            </div>
+            <div style="margin-top:15px; display:flex; justify-content:space-between;">
+                <button class="btn-danger" onclick="closeModal('modal-add-plan')">Cancel</button>
+                <button class="btn-success" onclick="savePlan()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-taskset" class="modal">
+        <div class="glass-panel modal-content" style="max-width: 500px;">
+            <h3>Create Taskset</h3>
+            <input type="text" id="ts-name" placeholder="Taskset Name (e.g. Work Day)">
+            <div style="border: 1px solid rgba(255,255,255,0.2); padding:10px; border-radius:10px; margin: 10px 0;">
+                <select id="ts-task-select"></select>
+                <div style="display:flex; gap:5px;">
+                    <input type="time" id="ts-time-from">
+                    <input type="time" id="ts-time-to">
+                </div>
+                <button class="btn-glass" style="width:100%; margin-top:5px;" onclick="addToTempTaskset()">+ Add to Set</button>
+            </div>
+            <div id="temp-taskset-list" style="text-align:left; max-height:150px; overflow-y:auto; margin-bottom:10px;"></div>
+            <div style="display:flex; justify-content:space-between;">
+                <button class="btn-danger" onclick="closeModal('modal-taskset')">Cancel</button>
+                <button class="btn-success" onclick="saveTaskset()">Save Taskset</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-paste" class="modal">
+        <div class="glass-panel modal-content">
+            <h3>Paste Taskset</h3>
+            <select id="paste-select"></select>
+            <div style="margin-top:15px; display:flex; justify-content:space-between;">
+                <button class="btn-danger" onclick="closeModal('modal-paste')">Cancel</button>
+                <button class="btn-success" onclick="confirmPaste()">Paste</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-edit-time" class="modal">
+        <div class="glass-panel modal-content">
+            <h3>Edit Time</h3>
+            <div style="display:flex; gap:5px;">
+                <input type="time" id="edit-time-from">
+                <input type="time" id="edit-time-to">
+            </div>
+            <div style="margin-top:15px; display:flex; justify-content:space-between;">
+                <button class="btn-danger" onclick="closeModal('modal-edit-time')">Cancel</button>
+                <button class="btn-success" onclick="saveEditedTime()">Save</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="modal-add-task-to-set" class="modal">
+        <div class="glass-panel modal-content">
+            <h3>Add Task to Set</h3>
+            <select id="ats-task-select"></select>
+            <div style="display:flex; gap:5px;">
+                <input type="time" id="ats-time-from">
+                <input type="time" id="ats-time-to">
+            </div>
+            <div style="margin-top:15px; display:flex; justify-content:space-between;">
+                <button class="btn-danger" onclick="closeModal('modal-add-task-to-set')">Cancel</button>
+                <button class="btn-success" onclick="saveTaskToSet()">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-readme" class="modal">
+        <div class="glass-panel modal-content" style="text-align:left;">
+            <h2 style="text-align:center;">DayCraft Guide</h2>
+            <div style="font-size:0.9rem; line-height:1.6;">
+                <p><b>1. Planning:</b><br>Define tasks in 'Manager'. Create 'Tasksets' for routine days. In 'Planner', add individual tasks or paste sets for the next 3 days.</p>
+                
+                <p><b>2. Execution:</b><br>Swipe tasks right (Done button) when completed. The vertical bar fills as you finish tasks.</p>
+                
+                <p><b>3. The Debt System:</b><br>
+                - If you miss a task, you get <b>1 Debt</b>.<br>
+                - To heal, you must do that task for <b>3 days straight</b> (Recovery).<br>
+                - Each time you miss it again, Recovery increases by <b>2 days</b>.<br>
+                - <i>"Discipline is built by repair, not perfection."</i></p>
+                
+                <p><b>4. Freeze Day ❄️:</b><br>Found in Settings. Turn this ON during emergencies. It pauses the Debt system so you can end the day without penalties.</p>
+            </div>
+            <button class="btn-primary" style="width:100%; margin-top:20px;" onclick="closeModal('modal-readme')">Got it!</button>
+        </div>
+    </div>
+
+    <script>
+        // --- State Management ---
+        const DB_KEY = 'daycraft_db_v1';
+        let state = {
+            user: { name: '', setupComplete: false, theme: 'light', isFrozen: false },
+            taskPool: ['Gym', 'Work', 'Study', 'Sleep', 'Eat'],
+            taskSets: [], 
+            plans: {}, 
+            debts: {} 
+        };
+
+        let tempTaskset = [];
+        let selectedPlannerDate = null; 
+        
+        // Edit Variables
+        let editSetIdx = -1;
+        let editTaskIdx = -1;
+        let targetSetIdx = -1; 
+
+        // --- Init ---
+        function loadData() {
+            const saved = localStorage.getItem(DB_KEY);
+            if (saved) {
+                state = JSON.parse(saved);
+                // Backwards compatibility for isFrozen
+                if(typeof state.user.isFrozen === 'undefined') state.user.isFrozen = false;
+
+                if (state.user.setupComplete) {
+                    document.getElementById('setup-wizard').style.display = 'none';
+                    document.getElementById('main-app').style.display = 'flex'; 
+                    initApp();
+                } else {
+                    document.getElementById('setup-wizard').style.display = 'flex';
+                    document.getElementById('main-app').style.display = 'none';
+                    renderSetupPool();
+                }
+            } else {
+                document.getElementById('setup-wizard').style.display = 'flex';
+                document.getElementById('main-app').style.display = 'none';
+                renderSetupPool();
+            }
+            applyTheme(state.user.theme);
+        }
+
+        function saveData() {
+            localStorage.setItem(DB_KEY, JSON.stringify(state));
+        }
+
+        // --- Theme ---
+        function toggleTheme() {
+            const newTheme = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
+            applyTheme(newTheme);
+            state.user.theme = newTheme;
+            if(state.user.setupComplete) saveData();
+        }
+
+        function applyTheme(theme) {
+            if (theme === 'dark') document.body.classList.add('dark-mode');
+            else document.body.classList.remove('dark-mode');
+        }
+
+        // --- Setup ---
+        function renderSetupPool() {
+            const list = document.getElementById('setup-task-list');
+            list.innerHTML = state.taskPool.map(t => `<span class="pill" style="margin:2px; display:inline-block;">${t}</span>`).join('');
+        }
+        function addSetupTask() {
+            const input = document.getElementById('setup-new-task');
+            if (input.value) {
+                state.taskPool.push(input.value);
+                input.value = '';
+                renderSetupPool();
+            }
+        }
+        function completeSetup() {
+            const name = document.getElementById('setup-name').value;
+            if (!name) return alert("Please enter your name");
+            state.user.name = name;
+            state.user.setupComplete = true;
+            saveData();
+            document.getElementById('setup-wizard').style.display = 'none';
+            document.getElementById('main-app').style.display = 'flex';
+            initApp();
+        }
+
+        // --- Main App Logic ---
+        function initApp() {
+            updateGreeting();
+            renderPills();
+            renderExecution();
+            renderDebt();
+            updateFreezeUI();
+            
+            document.getElementById('settings-name-input').value = state.user.name;
+        }
+
+        function navTo(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            
+            document.getElementById(`page-${pageId}`).classList.add('active');
+            
+            const map = { 'planner': 0, 'execution': 1, 'manager': 2, 'settings': 3 };
+            document.querySelectorAll('.nav-item')[map[pageId]].classList.add('active');
+
+            if (pageId === 'planner') {
+                renderPills();
+                renderDebt();
+            }
+            if (pageId === 'manager') renderManager();
+            if (pageId === 'execution') renderExecution();
+            if (pageId === 'settings') updateFreezeUI();
+        }
+
+        function updateGreeting() {
+            const hr = new Date().getHours();
+            let greet = "Good Morning";
+            if (hr >= 12) greet = "Good Noon";
+            if (hr >= 16) greet = "Good Afternoon";
+            if (hr >= 20) greet = "Good Night";
+            document.getElementById('planner-greeting').innerText = `${greet}, ${state.user.name}`;
+        }
+
+        function updateName() {
+            const newName = document.getElementById('settings-name-input').value;
+            if(newName) {
+                state.user.name = newName;
+                saveData();
+                updateGreeting();
+                alert("Name Updated!");
+            }
+        }
+
+        // --- Planner Logic ---
+        function getDates() {
+            const dates = [];
+            const today = new Date();
+            for(let i=0; i<3; i++) {
+                const d = new Date(today);
+                d.setDate(today.getDate() + i);
+                dates.push(d);
+            }
+            return dates;
+        }
+        function formatDateKey(dateObj) { return dateObj.toISOString().split('T')[0]; }
+        function formatDisplayDate(dateObj) { 
+            const d = dateObj.getDate();
+            const m = dateObj.toLocaleString('default', { month: 'short' });
+            return `${d} ${m}`;
+        }
+
+        function renderPills() {
+            const container = document.getElementById('planner-pills');
+            const dates = getDates();
+            if (!selectedPlannerDate) selectedPlannerDate = formatDateKey(dates[0]);
+            container.innerHTML = dates.map(d => {
+                const key = formatDateKey(d);
+                const active = key === selectedPlannerDate ? 'active' : '';
+                return `<div class="pill ${active}" onclick="selectDate('${key}')">${formatDisplayDate(d)}</div>`;
+            }).join('');
+            renderPlanList();
+        }
+
+        function selectDate(key) {
+            selectedPlannerDate = key;
+            renderPills();
+        }
+
+        function renderPlanList() {
+            const list = state.plans[selectedPlannerDate] || [];
+            const container = document.getElementById('planner-list-display');
+            if (list.length === 0) {
+                container.innerHTML = `<p style="text-align:center; opacity:0.5;">No plans for this date yet.</p>`;
+                return;
+            }
+            list.sort((a,b) => a.from.localeCompare(b.from));
+            container.innerHTML = list.map((item, index) => `
+                <div class="task-card glass-panel" style="background:rgba(255,255,255,0.1); border:none; margin-bottom:5px;">
+                    <span><b>${item.from} - ${item.to}</b>: ${item.name}</span>
+                    <svg onclick="deletePlan(${index})" class="action-icon icon-trash" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                </div>
+            `).join('');
+        }
+
+        function openAddPlanModal() {
+            const sel = document.getElementById('modal-task-select');
+            sel.innerHTML = state.taskPool.map(t => `<option>${t}</option>`).join('');
+            // Clear custom input
+            document.getElementById('modal-custom-task').value = '';
+            document.getElementById('modal-add-plan').style.display = 'flex';
+        }
+        function savePlan() {
+            const dropdownVal = document.getElementById('modal-task-select').value;
+            const customVal = document.getElementById('modal-custom-task').value.trim();
+            // Priority: Custom > Dropdown
+            const name = customVal ? customVal : dropdownVal;
+
+            const from = document.getElementById('modal-time-from').value;
+            const to = document.getElementById('modal-time-to').value;
+            
+            if(!name || !from || !to) return alert("Fill all fields");
+            if (!state.plans[selectedPlannerDate]) state.plans[selectedPlannerDate] = [];
+            state.plans[selectedPlannerDate].push({ name, from, to, completed: false });
+            saveData();
+            closeModal('modal-add-plan');
+            renderPlanList();
+        }
+        function deletePlan(idx) {
+            state.plans[selectedPlannerDate].splice(idx, 1);
+            saveData();
+            renderPlanList();
+        }
+        function openPasteTasksetModal() {
+            const sel = document.getElementById('paste-select');
+            if (state.taskSets.length === 0) return alert("Create a taskset in Manager first.");
+            sel.innerHTML = state.taskSets.map((ts, i) => `<option value="${i}">${ts.name}</option>`).join('');
+            document.getElementById('modal-paste').style.display = 'flex';
+        }
+        function confirmPaste() {
+            const idx = document.getElementById('paste-select').value;
+            const set = state.taskSets[idx];
+            if (!state.plans[selectedPlannerDate]) state.plans[selectedPlannerDate] = [];
+            set.tasks.forEach(t => { state.plans[selectedPlannerDate].push({ ...t, completed: false }); });
+            saveData();
+            closeModal('modal-paste');
+            renderPlanList();
+        }
+
+        // --- Manager Logic ---
+        function renderManager() {
+            document.getElementById('mgr-pool-list').innerHTML = state.taskPool.map((t, i) => `
+                <div class="glass-panel" style="padding:10px 15px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.1);">
+                    <span style="font-weight:500;">${t}</span>
+                    <div style="display:flex;">
+                        <svg onclick="mgrRenameTask(${i})" class="action-icon icon-edit" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                        <svg onclick="mgrDelTask(${i})" class="action-icon icon-trash" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('mgr-tasksets-list').innerHTML = state.taskSets.map((ts, i) => {
+                const tasksHtml = ts.tasks.map((t, j) => `
+                    <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.9rem; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <span>${t.from} - ${t.to}: <b>${t.name}</b></span>
+                        <div style="display:flex;">
+                            <svg onclick="openEditTimeModal(${i}, ${j})" class="action-icon icon-edit" style="width:16px; height:16px;" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                            <svg onclick="mgrDelTaskFromSet(${i}, ${j})" class="action-icon icon-trash" style="width:16px; height:16px;" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                        </div>
+                    </div>
+                `).join('');
+                
+                return `
+                <details class="set-card glass-panel" style="background:rgba(255,255,255,0.1);">
+                    <summary>
+                        <span>${ts.name}</span>
+                        <div style="display:flex;">
+                            <svg onclick="event.preventDefault(); mgrRenameSet(${i})" class="action-icon icon-edit" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                            <svg onclick="event.preventDefault(); mgrDelSet(${i})" class="action-icon icon-trash" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                        </div>
+                    </summary>
+                    <div class="set-content">
+                        ${tasksHtml}
+                        <button class="btn-glass" style="width:100%; margin-top:10px; font-size:0.8rem;" onclick="openAddTaskToSetModal(${i})">+ Add Task</button>
+                    </div>
+                </details>
+            `;
+            }).join('');
+        }
+
+        function mgrAddTask() {
+            const v = document.getElementById('mgr-new-task').value;
+            if(v) { state.taskPool.push(v); document.getElementById('mgr-new-task').value=''; saveData(); renderManager(); }
+        }
+        function mgrDelTask(i) { state.taskPool.splice(i,1); saveData(); renderManager(); }
+        function mgrDelSet(i) { state.taskSets.splice(i,1); saveData(); renderManager(); }
+        
+        function mgrRenameTask(i) {
+            const oldName = state.taskPool[i];
+            const newName = prompt("Rename Task:", oldName);
+            if(newName && newName !== oldName) { 
+                state.taskPool[i] = newName; 
+                state.taskSets.forEach(set => {
+                    set.tasks.forEach(task => { if(task.name === oldName) task.name = newName; });
+                });
+                saveData(); renderManager(); 
+            }
+        }
+        function mgrRenameSet(i) {
+            const oldName = state.taskSets[i].name;
+            const newName = prompt("Rename Taskset:", oldName);
+            if(newName && newName !== oldName) { state.taskSets[i].name = newName; saveData(); renderManager(); }
+        }
+        function mgrDelTaskFromSet(setIdx, taskIdx) {
+            state.taskSets[setIdx].tasks.splice(taskIdx, 1);
+            saveData(); renderManager();
+        }
+        function openEditTimeModal(setIdx, taskIdx) {
+            editSetIdx = setIdx;
+            editTaskIdx = taskIdx;
+            const t = state.taskSets[setIdx].tasks[taskIdx];
+            document.getElementById('edit-time-from').value = t.from;
+            document.getElementById('edit-time-to').value = t.to;
+            document.getElementById('modal-edit-time').style.display = 'flex';
+        }
+        function saveEditedTime() {
+            const from = document.getElementById('edit-time-from').value;
+            const to = document.getElementById('edit-time-to').value;
+            if(from && to && editSetIdx > -1 && editTaskIdx > -1) {
+                state.taskSets[editSetIdx].tasks[editTaskIdx].from = from;
+                state.taskSets[editSetIdx].tasks[editTaskIdx].to = to;
+                saveData(); renderManager(); closeModal('modal-edit-time');
+            }
+        }
+        function openAddTaskToSetModal(idx) {
+            targetSetIdx = idx;
+            const sel = document.getElementById('ats-task-select');
+            sel.innerHTML = state.taskPool.map(t => `<option>${t}</option>`).join('');
+            document.getElementById('ats-time-from').value = '';
+            document.getElementById('ats-time-to').value = '';
+            document.getElementById('modal-add-task-to-set').style.display = 'flex';
+        }
+        function saveTaskToSet() {
+            const name = document.getElementById('ats-task-select').value;
+            const from = document.getElementById('ats-time-from').value;
+            const to = document.getElementById('ats-time-to').value;
+            if(!name || !from || !to) return alert("Fill all fields");
+            if(targetSetIdx > -1) {
+                state.taskSets[targetSetIdx].tasks.push({name, from, to});
+                saveData(); renderManager(); closeModal('modal-add-task-to-set');
+            }
+        }
+        function openCreateTaskset() {
+            tempTaskset = [];
+            document.getElementById('ts-name').value = '';
+            document.getElementById('temp-taskset-list').innerHTML = '';
+            const sel = document.getElementById('ts-task-select');
+            sel.innerHTML = state.taskPool.map(t => `<option>${t}</option>`).join('');
+            document.getElementById('modal-taskset').style.display = 'flex';
+        }
+        function addToTempTaskset() {
+            const name = document.getElementById('ts-task-select').value;
+            const from = document.getElementById('ts-time-from').value;
+            const to = document.getElementById('ts-time-to').value;
+            if(!from || !to) return;
+            tempTaskset.push({name, from, to});
+            document.getElementById('temp-taskset-list').innerHTML = tempTaskset.map(t => 
+                `<div style="font-size:0.9rem; border-bottom:1px solid #ccc;">${t.from}-${t.to}: ${t.name}</div>`
+            ).join('');
+        }
+        function saveTaskset() {
+            const name = document.getElementById('ts-name').value;
+            if(!name || tempTaskset.length === 0) return alert("Name required and at least 1 task.");
+            state.taskSets.push({ name, tasks: tempTaskset });
+            saveData(); closeModal('modal-taskset'); renderManager();
+        }
+
+        // --- Execution Logic ---
+        function renderExecution() {
+            const todayKey = formatDateKey(new Date());
+            const list = state.plans[todayKey] || [];
+            
+            // Calculate Progress
+            const total = list.length;
+            const done = list.filter(t => t.completed).length;
+            const percent = total === 0 ? 0 : (done / total) * 100;
+            document.getElementById('day-progress').style.height = `${percent}%`;
+
+            list.sort((a,b) => a.from.localeCompare(b.from));
+            const container = document.getElementById('execution-list');
+            if (list.length === 0 && percent !== 100) {
+                container.innerHTML = `<div style="padding:20px; text-align:center; opacity:0.7;">Relax, no tasks scheduled for today.</div>`;
+                return;
+            }
+            container.innerHTML = list.map((item, index) => {
+                if(item.completed) return ''; 
+                return `
+                <div class="timeline-item glass-panel" id="exec-task-${index}">
+                    <div style="font-weight:bold; font-size:1.1rem;">${item.name}</div>
+                    <div style="opacity:0.7; font-size:0.9rem;">${item.from} - ${item.to}</div>
+                    <div style="position:absolute; right:10px; top:50%; transform:translateY(-50%);">
+                        <button class="btn-success" onclick="swipeTask(${index})">Done ✓</button>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function swipeTask(index) {
+            const todayKey = formatDateKey(new Date());
+            const el = document.getElementById(`exec-task-${index}`);
+            el.classList.add('swiped-out');
+            setTimeout(() => {
+                state.plans[todayKey][index].completed = true;
+                saveData();
+                renderExecution(); // Re-render updates progress
+            }, 300);
+        }
+
+        // --- Freeze Logic ---
+        function toggleFreeze() {
+            state.user.isFrozen = !state.user.isFrozen;
+            saveData();
+            updateFreezeUI();
+        }
+
+        function updateFreezeUI() {
+            const btn = document.getElementById('freeze-btn');
+            if(state.user.isFrozen) {
+                btn.innerText = "ON";
+                btn.style.background = "var(--accent)";
+                btn.style.color = "white";
+                btn.style.boxShadow = "0 0 10px var(--accent)";
+            } else {
+                btn.innerText = "OFF";
+                btn.style.background = "rgba(0,0,0,0.2)";
+                btn.style.color = "inherit";
+                btn.style.boxShadow = "none";
+            }
+        }
+
+        // --- Peace Out & Debt Logic ---
+        function confirmPeaceOut() {
+            const msg = state.user.isFrozen 
+                ? "Freeze Mode is ON. No debts will be counted. Confirm end of day?" 
+                : "Confirm End of Day? Unfinished tasks will become Debt.";
+            
+            if(confirm(msg)) {
+                processEndOfDay();
+            }
+        }
+
+        function processEndOfDay() {
+            const todayKey = formatDateKey(new Date());
+            const todayTasks = state.plans[todayKey] || [];
+            const incomplete = todayTasks.filter(t => !t.completed);
+            const completed = todayTasks.filter(t => t.completed);
+
+            if (!state.user.isFrozen) {
+                // NORMAL MODE: Calculate Debts
+                incomplete.forEach(t => {
+                    if(!state.debts[t.name]) { 
+                        state.debts[t.name] = { count: 0, recovery: 1, streak: 0 }; 
+                    }
+                    const d = state.debts[t.name];
+                    d.count += 1; 
+                    d.streak = 0; 
+                    d.recovery += 2;
+                });
+
+                completed.forEach(t => {
+                    if(state.debts[t.name]) {
+                        const d = state.debts[t.name];
+                        d.streak += 1; 
+                        d.recovery -= 1;
+                        if (d.recovery <= 0) { 
+                            delete state.debts[t.name]; 
+                        }
+                    }
+                });
+            } else {
+                // FREEZE MODE: Just turn off freeze for tomorrow (optional, but let's keep it manual per user request 'cheat button')
+                // Actually, user said 'cheat button to pause'. Usually you turn it off manually. 
+                // We won't auto-disable it to be safe.
+                alert("Day Ended in Freeze Mode. No debts added.");
+            }
+
+            saveData();
+            if(!state.user.isFrozen) alert("Day Ended. Good job! Check Planner for any debts.");
+            navTo('planner');
+            renderDebt();
+            renderExecution(); 
+        }
+        
+        function renderDebt() {
+            const container = document.getElementById('debt-container');
+            const keys = Object.keys(state.debts);
+            if (keys.length === 0) { container.innerHTML = ''; return; }
+            let html = '';
+            keys.forEach(k => {
+                const d = state.debts[k];
+                html += `
+                <div class="debt-card glass-panel">
+                    <div style="font-weight:bold; font-size:1.1rem;">${k} Debt: ${d.count}</div>
+                    <div>Recovery Required: ${d.recovery} uninterrupted days</div>
+                    <div class="debt-quote">“Discipline is built by repair, not perfection.”</div>
+                </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        // --- Utils & ReadMe ---
+        function openReadMe() { document.getElementById('modal-readme').style.display = 'flex'; }
+
+        function backupData() {
+            const str = JSON.stringify(state);
+            const blob = new Blob([str], {type: "application/json"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "daycraft_backup_" + formatDateKey(new Date()) + ".json";
+            a.click();
+        }
+        function restoreData() { document.getElementById('restore-file').click(); }
+        function processRestore(input) {
+            const file = input.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    state = JSON.parse(e.target.result);
+                    saveData();
+                    alert("Restored successfully!");
+                    location.reload();
+                } catch(err) { alert("Invalid backup file"); }
+            };
+            reader.readAsText(file);
+        }
+        function resetAllData() {
+            if(confirm("Are you sure? This wipes everything.")) {
+                if(confirm("REALLY SURE?")) { localStorage.removeItem(DB_KEY); location.reload(); }
+            }
+        }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+        // Start
+        loadData();
+
+    </script>
+</body>
+</html>
